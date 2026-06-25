@@ -15,7 +15,7 @@ version: 1.0.0
 - "开启自动回复邮件"、"自动回邮件"
 - "监听邮箱"、"盯一下邮箱"、"watch my mail"
 - "新邮件来了帮我回"
-- "停掉监听"（用于停止已运行的 watcher）
+- "停掉监听"（用于停止已运行的 monitor）
 
 ## 前置依赖
 
@@ -91,7 +91,7 @@ QQ 后端限频 200 次/小时。用 AskUserQuestion 让用户选：
    ```
 4. 全程在对话里同步进度。
 
-任何一步失败 → 告诉用户具体原因，**结束流程**，不启动 watcher。
+任何一步失败 → 告诉用户具体原因，**结束流程**，不启动 monitor。
 
 ### Step 5 — 温柔提示 Always 允许（仅 c / d 模式）
 
@@ -167,7 +167,23 @@ QQ 后端限频 200 次/小时。用 AskUserQuestion 让用户选：
 
 收到确认后再继续。
 
-### Step 7 — 启动 watcher
+### Step 7 — 启动 monitor
+
+**7.1 — 运行中实例检查**
+
+启动前先扫一下机器，避免和其他会话/agent 已经在跑的 monitor 重复——重复会导致同一封邮件被回复多次。
+
+```bash
+pgrep -fl "monitor-mail.*watch\.mjs" || true
+```
+
+- 没匹配到 → 直接进 7.2 启动
+- 有匹配 → 用 AskUserQuestion 让用户选：
+  - **停掉旧的再开新的**：`kill <旧PID>` 后启动
+  - **取消本次启动**：避免重复回复，结束流程
+  - **继续启动（明确并行）**：仅当用户清楚知道会重复（例如同邮箱不同模式分工）时选
+
+**7.2 — 启动**
 
 用 `Monitor` 工具（`persistent: true`）启动：
 
@@ -233,13 +249,13 @@ agently-cli message +reply --id <id> --body "<回复内容>" --confirmation-toke
 ### 停止监听
 
 用户说"停掉"/"stop"/"关掉监听"时：
-1. 调用 `TaskStop` 杀掉 watcher 任务
+1. 调用 `TaskStop` 杀掉 monitor 任务
 2. 告诉用户："监听已停止。"
 
 ### 修改策略（运行中）
 
 用户说"换成审稿后发"、"加个白名单"、"改下口吻"之类时：
-1. 不需要重启 watcher
+1. 不需要重启 monitor
 2. 用 AskUserQuestion 增量更新 `POLICY` 或 `MODE`
 3. 告诉用户："已更新策略：<diff>。新到的邮件会用新策略。"
 
@@ -247,13 +263,13 @@ agently-cli message +reply --id <id> --body "<回复内容>" --confirmation-toke
 
 | 事件 | 含义 | Claude 应对 |
 |---|---|---|
-| `watch_started` | watcher 启动并完成基线锚定 | 告知用户监听上线 |
+| `watch_started` | monitor 启动并完成基线锚定 | 告知用户监听上线 |
 | `new_mail` | 新邮件抵达 | 走 Step 8 流程（按 MODE 分流）|
-| `poll_stuck` | 连续 3 次轮询失败 | 告诉用户 watcher 可能挂了，问是否重启 |
+| `poll_stuck` | 连续 3 次轮询失败 | 告诉用户 monitor 可能挂了，问是否重启 |
 
 ## 注意事项
 
-- watcher 是**会话内**的：会话结束 / Claude Code 关掉 → watcher 死亡，不再自动回复
+- monitor 是**会话内**的：会话结束 / Claude Code 关掉 → monitor 死亡，不再自动回复
 - 这是有意的安全设计——不在用户视野外发邮件
 - 想要 7×24，需要另外架构（launchd + 无会话 Agent），不在本 skill 范围内
 - **默认不透露主人真实身份/联系方式**——要透露必须用户明确同意
